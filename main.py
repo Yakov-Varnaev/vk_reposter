@@ -8,6 +8,7 @@ from asyncio.events import AbstractEventLoop
 from aiogram import Dispatcher, Bot, types, executor
 import nest_asyncio
 import vk_api
+from aiogram.types import MediaGroup
 from vk_api.bot_longpoll import VkBotLongPoll
 from dotenv import load_dotenv
 
@@ -62,15 +63,21 @@ def poller(config: GroupConfig, events):
 
 async def main():
     loop = asyncio.get_event_loop()
-    events = []
+    events: list[EventParser] = []
     for group_conf in groups:
         Thread(target=poller, args=[group_conf, events]).start()
 
     while True:
         while events:
-            event = events.pop()
-            await tg_bot.send_message(groups[0].chat, event.text)
-            log.info(f'{event.text}')
+            event = events[-1]
+            if event.has_attachment:
+                media = MediaGroup()
+                for url in event.extract_pictures():
+                    media.attach_photo(url, caption=event.text)
+                await tg_bot.send_media_group(chat_id=groups[0].chat, media=media)
+            else:
+                await tg_bot.send_message(groups[0].chat, event.text)
+            events.pop()
 
 
 if __name__ == '__main__':
